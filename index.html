@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 우리 반 독서왕 - 모둠 독서 게이미피케이션</title>
+    <!-- CDN 라이브러리 (Confetti) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4A90E2;
+            --secondary-color: #FF9F43;
+            --success-color: #10AC84;
+            --bg-color: #F0F3F8;
+            --card-bg: #FFFFFF;
+            --text-color: #2D3436;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Pretendard', 'Malgun Gothic', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); padding-bottom: 70px; }
+
+        /* 공통 UI 및 반응형 레이아웃 */
+        .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+        .card { background: var(--card-bg); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--primary-color); color: white; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        .btn:active { transform: scale(0.98); }
+        .btn-secondary { background: var(--secondary-color); }
+        .btn-success { background: var(--success-color); }
+        .btn-danger { background: #EE5253; }
+        input, select { width: 100%; padding: 12px; border: 2px solid #E0E0E0; border-radius: 10px; margin-bottom: 12px; font-size: 15px; }
+
+        /* 상단 헤더 */
+        header { background: white; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); sticky: top; }
+        .mileage-badge { background: #FECA57; padding: 8px 14px; border-radius: 20px; font-weight: bold; font-size: 15px; color: #222; }
+
+        /* 프로그래스 바 및 레이스 트랙 */
+        .progress-bar-bg { background: #E0E0E0; border-radius: 10px; height: 20px; overflow: hidden; position: relative; }
+        .progress-bar-fill { background: linear-gradient(90deg, #54A0FF, #00D2D3); height: 100%; width: 0%; transition: width 0.5s ease-in-out; }
+
+        .race-track { background: #E2F0D9; border: 2px dashed #70AD47; border-radius: 12px; padding: 16px; margin: 12px 0; position: relative; }
+        .runner-line { position: relative; height: 40px; margin-bottom: 8px; border-bottom: 1px solid #C5E0B4; }
+        .runner-avatar { position: absolute; left: 0%; top: 0; font-size: 24px; transition: left 0.5s; }
+
+        /* 하단 탭 네비게이션 */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid #E0E0E0; max-width: 600px; margin: 0 auto; z-index: 100; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 12px; color: #888; cursor: pointer; }
+        .nav-item.active { color: var(--primary-color); font-weight: bold; }
+        .nav-item div { font-size: 20px; margin-bottom: 2px; }
+
+        /* 모달 팝업 */
+        .modal { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 24px; border-radius: 20px; max-width: 90%; width: 380px; text-align: center; }
+
+        /* 로딩 오버레이 */
+        #loadingOverlay { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.8); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; font-weight: bold; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 12px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- 로딩 스피너 -->
+    <div id="loadingOverlay">
+        <div class="spinner"></div>
+        <div>⏳ 잠시만 기다려주세요...</div>
+    </div>
+
+    <!-- 1. 로그인 화면 -->
+    <div id="loginView" class="container" style="margin-top: 60px;">
+        <div class="card" style="text-align: center;">
+            <h1 style="margin-bottom: 20px; color: var(--primary-color);">📚 우리 반 독서왕</h1>
+            <input type="text" id="loginName" placeholder="이름을 입력하세요 (예: 김민준)">
+            <input type="password" id="loginPassword" placeholder="비밀번호를 입력하세요">
+            <button class="btn" onclick="login()">로그인하기</button>
+        </div>
+    </div>
+
+    <!-- 2. 비밀번호 변경 모달 -->
+    <div id="pwdModal" class="modal">
+        <div class="modal-content">
+            <h3>🔐 새 비밀번호 설정</h3>
+            <p style="font-size: 13px; color: #666; margin: 8px 0 16px 0;">최초 로그인입니다. 변경할 비밀번호를 입력해주세요.</p>
+            <input type="password" id="newPassword" placeholder="새 비밀번호 (4자리 이상)">
+            <button class="btn" onclick="changePassword()">비밀번호 변경 완료</button>
+        </div>
+    </div>
+
+    <!-- 메인 앱 영역 (로그인 후 표시) -->
+    <div id="appView" style="display: none;">
+        <header>
+            <div id="userHeaderInfo"><b>👦 김민준</b> (독서탐험대)</div>
+            <div class="mileage-badge" onclick="switchTab('shop')">💰 <span id="userMileage">0</span> P</div>
+        </header>
+
+        <div class="container">
+            <!-- 탭 1: 홈 / 독서 진도 -->
+            <div id="tabHome" class="tab-content">
+                <!-- 나의 독서 진도 -->
+                <div class="card">
+                    <h2>📖 나의 독서 진도</h2>
+                    <h3 id="bookTitle" style="color: var(--primary-color); margin: 8px 0;">책 정보 불러오는 중...</h3>
+                    <p style="margin-bottom: 8px;">현재 <b id="currentPageText">0</b> / <span id="totalPagesText">0</span> 쪽</p>
+                    <div class="progress-bar-bg">
+                        <div id="myProgressBar" class="progress-bar-fill"></div>
+                    </div>
+                    <div style="text-align: right; margin-top: 4px; font-weight: bold; color: var(--primary-color);" id="myProgressPercent">0%</div>
+
+                    <div style="margin-top: 16px; display: flex; gap: 8px;">
+                        <input type="number" id="inputPage" placeholder="오늘 읽은 쪽수 입력" style="margin-bottom: 0;">
+                        <button class="btn" style="width: 140px;" onclick="saveProgress()">📖 인증</button>
+                    </div>
+                </div>
+
+                <!-- 우리 모둠 평균 & 레이스 -->
+                <div class="card">
+                    <h3>🏆 우리 모둠 평균: <span id="teamAvgPercent" style="color: var(--secondary-color);">0%</span></h3>
+                    <div class="race-track" id="raceTrack">
+                        <!-- 레이스 러너들 동적 생성 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 탭 2: 행운 룰렛 -->
+            <div id="tabRoulette" class="tab-content" style="display: none;">
+                <div class="card" style="text-align: center;">
+                    <h2>🎰 오늘의 행운 룰렛</h2>
+                    <p style="margin: 8px 0 20px 0; color: #666;">하루에 한 번! 룰렛을 돌려 보상을 받으세요.</p>
+                    <div style="font-size: 80px; margin: 20px 0;" id="rouletteIcon">🎁</div>
+                    <button class="btn btn-secondary" id="btnRoulette" onclick="spinRoulette()">🎰 룰렛 돌리기</button>
+                </div>
+            </div>
+
+            <!-- 탭 3: 퀴즈 장터 -->
+            <div id="tabQuiz" class="tab-content" style="display: none;">
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h2>📚 퀴즈 장터</h2>
+                        <button class="btn btn-success" style="width: 110px; padding: 8px;" onclick="showQuizCreateModal()">✏️ 출제하기</button>
+                    </div>
+                    <div id="quizList">
+                        <!-- 퀴즈 항목 동적 생성 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 탭 4: 마일리지 상점 -->
+            <div id="tabShop" class="tab-content" style="display: none;">
+                <div class="card">
+                    <h2>🎁 마일리지 사용하기</h2>
+                    <p style="color: #666; margin-bottom: 16px;">모은 마일리지로 학급 쿠폰을 교환하세요!</p>
+                    <div id="shopList">
+                        <div style="border: 1px solid #eee; border-radius: 10px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <div><b>자리 우선 선택권</b> (30 P)</div>
+                            <button class="btn btn-secondary" style="width: 80px; padding: 6px;" onclick="useMileage('자리 우선 선택권', 30)">교환</button>
+                        </div>
+                        <div style="border: 1px solid #eee; border-radius: 10px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <div><b>보드게임 10분 이용권</b> (50 P)</div>
+                            <button class="btn btn-secondary" style="width: 80px; padding: 6px;" onclick="useMileage('보드게임 이용권', 50)">교환</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 탭 5: 교사 관리자 화면 (teacher 전용) -->
+            <div id="tabTeacher" class="tab-content" style="display: none;">
+                <div class="card">
+                    <h2>⚙️ 교사 관리자 페이지</h2>
+
+                    <h4 style="margin: 16px 0 8px 0;">📚 모둠별 책 등록/수정</h4>
+                    <input type="text" id="tTeamName" placeholder="모둠명 (예: 1모둠)">
+                    <input type="text" id="tBookTitle" placeholder="책 제목">
+                    <input type="number" id="tTotalPages" placeholder="전체 페이지 수">
+                    <input type="number" id="tTargetPages" placeholder="이번 주 목표 페이지 수">
+                    <input type="text" id="tGoldenPages" placeholder="황금페이지 (쉼표로 구분 예: 35,87)">
+                    <button class="btn" onclick="teacherSaveBook()">책 정보 저장</button>
+
+                    <h4 style="margin: 24px 0 8px 0;">👦 학생 현황 및 비밀번호 관리</h4>
+                    <div id="teacherStudentList"></div>
+
+                    <h4 style="margin: 24px 0 8px 0;">🧩 등록된 퀴즈 관리</h4>
+                    <div id="teacherQuizList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 하단 네비게이션 바 -->
+        <nav class="bottom-nav">
+            <div class="nav-item active" onclick="switchTab('home')"><div>🏠</div>홈/진도</div>
+            <div class="nav-item" onclick="switchTab('roulette')"><div>🎰</div>룰렛</div>
+            <div class="nav-item" onclick="switchTab('quiz')"><div>🎯</div>퀴즈</div>
+            <div class="nav-item" onclick="switchTab('shop')"><div>🎁</div>상점</div>
+            <div class="nav-item" id="navTeacherBtn" style="display: none;" onclick="switchTab('teacher')"><div>⚙️</div>관리자</div>
+            <div class="nav-item" onclick="logout()"><div>🚪</div>로그아웃</div>
+        </nav>
+    </div>
+
+    <!-- 퀴즈 출제 모달 -->
+    <div id="quizCreateModal" class="modal">
+        <div class="modal-content">
+            <h3>✏️ 독서 퀴즈 출제</h3>
+            <input type="text" id="qQuestion" placeholder="질문을 입력하세요">
+            <input type="text" id="qOpt1" placeholder="보기 ①">
+            <input type="text" id="qOpt2" placeholder="보기 ②">
+            <input type="text" id="qOpt3" placeholder="보기 ③">
+            <input type="text" id="qOpt4" placeholder="보기 ④">
+            <select id="qAnswer">
+                <option value="">-- 정답 선택 --</option>
+                <option value="1">① 번</option>
+                <option value="2">② 번</option>
+                <option value="3">③ 번</option>
+                <option value="4">④ 번</option>
+            </select>
+            <button class="btn btn-success" onclick="createQuiz()">출제 완료 (+5 마일리지)</button>
+            <button class="btn btn-danger" style="margin-top: 8px;" onclick="closeModal('quizCreateModal')">취소</button>
+        </div>
+    </div>
+
+    <script>
+        // === 설정: 배포한 Google Apps Script Web App URL을 여기에 붙여넣으세요 ===
+        const API_URL = "https://script.google.com/macros/s/AKfycbyrcZJJVxNdgD_BRa0jg0BKzIVk8Ey9IJSshUbZF7QDpVZwFMTdQriUhzm5v19y2yjEYg/exec";
+
+        let currentUser = JSON.parse(sessionStorage.getItem('currentUser')) || null;
+
+        // API 공통 호출 함수
+        async function api(action, data = {}) {
+            showLoading(true);
+            try {
+                data.action = action;
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(data)
+                });
+                const res = await response.json();
+                showLoading(false);
+                if (!res.success) {
+                    alert("😥 " + res.message);
+                }
+                return res;
+            } catch (err) {
+                showLoading(false);
+                alert("😥 네트워크 연결에 문제가 발생했습니다. 다시 시도해 주세요.");
+                return { success: false };
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        // 초기화
+        window.onload = () => {
+            if (currentUser) {
+                initApp();
+            }
+        };
+
+        // 로그인
+        async function login() {
+            const userName = document.getElementById('loginName').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+
+            if (!userName || !password) return alert("이름과 비밀번호를 모두 입력해주세요.");
+
+            const res = await api('login', { userName, password });
+            if (res.success) {
+                currentUser = res.data;
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+                if (currentUser.firstLogin) {
+                    document.getElementById('pwdModal').style.display = 'flex';
+                } else {
+                    initApp();
+                }
+            }
+        }
+
+        // 비밀번호 변경
+        async function changePassword() {
+            const newPassword = document.getElementById('newPassword').value.trim();
+            if (newPassword.length < 4) return alert("비밀번호는 4자리 이상 입력해주세요.");
+
+            const res = await api('changePassword', { userID: currentUser.userID, newPassword });
+            if (res.success) {
+                alert(res.message);
+                document.getElementById('pwdModal').style.display = 'none';
+                currentUser.firstLogin = false;
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                initApp();
+            }
+        }
+
+        // 메인 앱 시작
+        function initApp() {
+            document.getElementById('loginView').style.display = 'none';
+            document.getElementById('appView').style.display = 'block';
+
+            document.getElementById('userHeaderInfo').innerHTML = `<b>👦 ${currentUser.userName}</b> (${currentUser.teamName})`;
+
+            if (currentUser.role === 'teacher') {
+                document.getElementById('navTeacherBtn').style.display = 'flex';
+            }
+
+            loadHomeData();
+        }
+
+        function logout() {
+            sessionStorage.removeItem('currentUser');
+            location.reload();
+        }
+
+        // 홈 데이터 로드
+        async function loadHomeData() {
+            const res = await api('getStudentData', { userID: currentUser.userID });
+            if (!res.success) return;
+
+            const d = res.data;
+            document.getElementById('userMileage').innerText = d.mileage;
+
+            if (d.book) {
+                document.getElementById('bookTitle').innerText = d.book.Title;
+                document.getElementById('totalPagesText').innerText = d.book.TotalPages;
+            } else {
+                document.getElementById('bookTitle').innerText = "등록된 책이 없습니다";
+            }
+
+            document.getElementById('currentPageText').innerText = d.myProgress.CurrentPage || 0;
+            const myRate = d.myProgress.ProgressRate || 0;
+            document.getElementById('myProgressBar').style.width = myRate + '%';
+            document.getElementById('myProgressPercent').innerText = myRate + '%';
+
+            // 모둠 평균 및 레이스
+            document.getElementById('teamAvgPercent').innerText = d.teamAvgRate + '%';
+            renderRaceTrack(d.teamProgress);
+
+            // 룰렛 버튼 상태
+            const btnR = document.getElementById('btnRoulette');
+            if (!d.canRoulette) {
+                btnR.disabled = true;
+                btnR.innerText = "오늘 룰렛 완료!";
+            }
+
+            // 모둠 완주 체크
+            if (d.teamAvgRate >= 100) {
+                checkTeamComplete();
+            }
+        }
+
+        // 레이스 트랙 렌더링
+        function renderRaceTrack(teamProgress) {
+            const track = document.getElementById('raceTrack');
+            track.innerHTML = '';
+
+            teamProgress.forEach(member => {
+                const line = document.createElement('div');
+                line.className = 'runner-line';
+                const rate = Math.min(90, member.progressRate); // UI 범위 제한
+                line.innerHTML = `
+                    <span style="font-size:12px; font-weight:bold;">${member.userName} (${member.progressRate}%)</span>
+                    <div class="runner-avatar" style="left: ${rate}%;">🏃</div>
+                `;
+                track.appendChild(line);
+            });
+        }
+
+        // 진도 인증
+        async function saveProgress() {
+            const page = document.getElementById('inputPage').value;
+            if (!page) return alert("페이지 수를 입력하세요.");
+
+            const res = await api('saveProgress', { userID: currentUser.userID, currentPage: page });
+            if (res.success) {
+                confetti();
+                alert(res.message);
+
+                if (res.data.goldenPageFound) {
+                    claimGoldenPage(res.data.goldenPageFound);
+                }
+                loadHomeData();
+            }
+        }
+
+        // 황금 페이지 수령
+        async function claimGoldenPage(pageNum) {
+            const res = await api('claimGoldenPage', { userID: currentUser.userID, pageNum: pageNum });
+            if (res.success) {
+                confetti();
+                alert("🎁 " + res.message);
+                loadHomeData();
+            }
+        }
+
+        // 모둠 완주 보상 수령
+        async function checkTeamComplete() {
+            const res = await api('claimTeamComplete', { userID: currentUser.userID });
+            if (res.success) {
+                confetti();
+                alert(res.message);
+                loadHomeData();
+            }
+        }
+
+        // 룰렛 돌리기
+        async function spinRoulette() {
+            const res = await api('spinRoulette', { userID: currentUser.userID });
+            if (res.success) {
+                if (res.data.isWin) confetti();
+                alert(res.message);
+                loadHomeData();
+            }
+        }
+
+        // 퀴즈 관련 기능
+        async function loadQuizzes() {
+            const res = await api('getQuizzes', { userID: currentUser.userID });
+            if (!res.success) return;
+
+            const container = document.getElementById('quizList');
+            container.innerHTML = '';
+
+            res.data.forEach(q => {
+                const item = document.createElement('div');
+                item.style.cssText = "border:1px solid #eee; padding:12px; border-radius:10px; margin-bottom:10px;";
+                item.innerHTML = `
+                    <div style="font-size:12px; color:#666;">출제자: ${q.creator}</div>
+                    <div style="font-weight:bold; margin:6px 0;">Q. ${q.question}</div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-bottom:8px;">
+                        <button class="btn" style="background:#f0f0f0; color:#333; padding:8px; font-size:13px;" onclick="submitQuiz('${q.quizID}', '1')">① ${q.options[0]}</button>
+                        <button class="btn" style="background:#f0f0f0; color:#333; padding:8px; font-size:13px;" onclick="submitQuiz('${q.quizID}', '2')">② ${q.options[1]}</button>
+                        <button class="btn" style="background:#f0f0f0; color:#333; padding:8px; font-size:13px;" onclick="submitQuiz('${q.quizID}', '3')">③ ${q.options[2]}</button>
+                        <button class="btn" style="background:#f0f0f0; color:#333; padding:8px; font-size:13px;" onclick="submitQuiz('${q.quizID}', '4')">④ ${q.options[3]}</button>
+                    </div>
+                    ${q.solved ? '<span style="color:green; font-size:12px; font-weight:bold;">✅ 해결 완료</span>' : ''}
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        async function submitQuiz(quizID, answer) {
+            const res = await api('submitQuiz', { userID: currentUser.userID, quizID: quizID, selectedAnswer: answer });
+            if (res.success) {
+                if (res.data.earned > 0) confetti();
+                alert(res.message);
+                loadQuizzes();
+                loadHomeData();
+            }
+        }
+
+        function showQuizCreateModal() {
+            document.getElementById('quizCreateModal').style.display = 'flex';
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        async function createQuiz() {
+            const question = document.getElementById('qQuestion').value.trim();
+            const opts = [
+                document.getElementById('qOpt1').value.trim(),
+                document.getElementById('qOpt2').value.trim(),
+                document.getElementById('qOpt3').value.trim(),
+                document.getElementById('qOpt4').value.trim()
+            ];
+            const answer = document.getElementById('qAnswer').value;
+
+            if (!question || opts.some(o => !o) || !answer) {
+                return alert("모든 입력란을 채워주세요.");
+            }
+
+            const res = await api('createQuiz', { userID: currentUser.userID, question, options: opts, answer });
+            if (res.success) {
+                alert(res.message);
+                closeModal('quizCreateModal');
+                loadQuizzes();
+                loadHomeData();
+            }
+        }
+
+        // 마일리지 사용
+        async function useMileage(itemName, cost) {
+            if (!confirm(`'${itemName}'을(를) ${cost} 마일리지로 교환하시겠습니까?`)) return;
+
+            const res = await api('useMileage', { userID: currentUser.userID, itemName, cost });
+            if (res.success) {
+                alert(res.message);
+                loadHomeData();
+            }
+        }
+
+        // 교사 관리자 기능
+        async function loadTeacherDashboard() {
+            const res = await api('getTeacherDashboard', { userID: currentUser.userID });
+            if (!res.success) return;
+
+            // 학생 관리 목록
+            const sContainer = document.getElementById('teacherStudentList');
+            sContainer.innerHTML = '';
+
+            res.data.students.forEach(s => {
+                const item = document.createElement('div');
+                item.style.cssText = "border-bottom:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; font-size:13px;";
+                item.innerHTML = `
+                    <div><b>${s.userName}</b> (${s.teamName}) - ${s.progressRate}% | 💰 ${s.mileage}P</div>
+                    <div>
+                        <button class="btn btn-secondary" style="width:auto; padding:4px 8px; font-size:11px;" onclick="teacherResetPwd('${s.userID}')">비번초기화</button>
+                        <button class="btn ${s.active ? 'btn-danger' : 'btn-success'}" style="width:auto; padding:4px 8px; font-size:11px;" onclick="teacherToggleActive('${s.userID}')">${s.active ? '비활성화' : '활성화'}</button>
+                    </div>
+                `;
+                sContainer.appendChild(item);
+            });
+
+            // 퀴즈 관리 목록
+            const qContainer = document.getElementById('teacherQuizList');
+            qContainer.innerHTML = '';
+
+            res.data.quizzes.forEach(q => {
+                const item = document.createElement('div');
+                item.style.cssText = "border-bottom:1px solid #eee; padding:8px 0; display:flex; justify-content:space-between; align-items:center; font-size:12px;";
+                item.innerHTML = `
+                    <div><b>[${q.Creator}]</b> ${q.Question}</div>
+                    <button class="btn btn-danger" style="width:auto; padding:4px 8px; font-size:11px;" onclick="teacherDeleteQuiz('${q.QuizID}')">삭제</button>
+                `;
+                qContainer.appendChild(item);
+            });
+        }
+
+        async function teacherSaveBook() {
+            const data = {
+                userID: currentUser.userID,
+                teamName: document.getElementById('tTeamName').value,
+                title: document.getElementById('tBookTitle').value,
+                totalPages: document.getElementById('tTotalPages').value,
+                targetPages: document.getElementById('tTargetPages').value,
+                goldenPages: document.getElementById('tGoldenPages').value
+            };
+
+            const res = await api('saveBook', data);
+            if (res.success) {
+                alert(res.message);
+                loadTeacherDashboard();
+            }
+        }
+
+        async function teacherResetPwd(targetUserID) {
+            if (!confirm("해당 학생의 비밀번호를 '1234'로 초기화하시겠습니까?")) return;
+            const res = await api('resetPassword', { userID: currentUser.userID, targetUserID });
+            if (res.success) alert(res.message);
+        }
+
+        async function teacherToggleActive(targetUserID) {
+            const res = await api('toggleStudentActive', { userID: currentUser.userID, targetUserID });
+            if (res.success) {
+                alert(res.message);
+                loadTeacherDashboard();
+            }
+        }
+
+        async function teacherDeleteQuiz(quizID) {
+            if (!confirm("이 퀴즈를 삭제하시겠습니까?")) return;
+            const res = await api('deleteQuiz', { userID: currentUser.userID, quizID });
+            if (res.success) {
+                alert(res.message);
+                loadTeacherDashboard();
+            }
+        }
+
+        // 탭 전환
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+            if (tabName === 'home') {
+                document.getElementById('tabHome').style.display = 'block';
+                loadHomeData();
+            } else if (tabName === 'roulette') {
+                document.getElementById('tabRoulette').style.display = 'block';
+            } else if (tabName === 'quiz') {
+                document.getElementById('tabQuiz').style.display = 'block';
+                loadQuizzes();
+            } else if (tabName === 'shop') {
+                document.getElementById('tabShop').style.display = 'block';
+            } else if (tabName === 'teacher') {
+                document.getElementById('tabTeacher').style.display = 'block';
+                loadTeacherDashboard();
+            }
+        }
+    </script>
+</body>
+</html>
